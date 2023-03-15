@@ -1,0 +1,160 @@
+public with sharing class MercuryChat {
+
+    public class Payload {
+        @InvocableVariable(label='[Required] API Endpoint')
+        public String EndPoint;
+        @InvocableVariable(label='[Required] API Key')
+        public String APIKey;
+        @InvocableVariable(label='[Required] Room')
+        public String room;
+        @InvocableVariable(label='Field 1 Name')
+        public String field1_name;
+        @InvocableVariable(label='Field 1')
+        public String field1;
+        @InvocableVariable(label='Field 2 Name')
+        public String field2_name;
+        @InvocableVariable(label='Field 2')
+        public String field2;
+        @InvocableVariable(label='Field 3 Name')
+        public String field3_name;
+        @InvocableVariable(label='Field 3')
+        public String field3;
+        @InvocableVariable(label='Field 4 Name')
+        public String field4_name;
+        @InvocableVariable(label='Field 4')
+        public String field4;
+        @InvocableVariable(label='Field 5 Name')
+        public String field5_name;
+        @InvocableVariable(label='Field 5')
+        public String field5;
+
+    }
+
+    private class CHAPIFormattedMessage {
+        String messageRaw;
+        String room;
+    }
+
+    @InvocableMethod(label='MercuryChat')
+    public static void MercuryChat(List<Payload> payloads) {
+        Payload p = payloads[0];
+        Map<String,Object> msg = new Map<String,Object>();
+
+        String APITarget = p.EndPoint;
+
+        // If the process sent a field name, add ': ' to the end of the label.
+        if (p.field1_name != null){
+            p.field1_name = p.field1_name + ': ';
+        } else p.field1_name = '';
+
+        if (p.field2_name != null){
+            p.field2_name = p.field2_name + ': ';
+        } else p.field2_name = '';
+
+        if (p.field3_name != null){
+            p.field3_name = p.field3_name + ': ';
+        } else p.field3_name = '';
+
+        if (p.field4_name != null){
+            p.field4_name = p.field4_name + ': ';
+        } else p.field4_name = '';
+
+        if (p.field5_name != null){
+            p.field5_name = p.field5_name + ': ';
+        } else p.field5_name = '';
+
+        // If there's data in the field itself, add a new line
+        if (p.field1 != null){
+            p.field1 = p.field1 + '\n';
+        } else p.field1 = '';
+
+        if (p.field2 != null){
+            p.field2 = p.field2 + '\n';
+        } else p.field2 = '';
+
+        if (p.field3 != null){
+            p.field3 = p.field3 + '\n';
+        } else p.field3 = '';
+
+        if (p.field4 != null){
+            p.field4 = p.field4 + '\n';
+        } else p.field4 = '';
+
+        if (p.field5 != null){
+            p.field5 = p.field5 + '\n';
+        } else p.field5 = '';
+
+
+        // Combine everthing in a formatted text message that looks like this:
+        // UserLabel1 : Value of some field
+        // UserLabel2 : Value of another field
+        // UserLabel3 : Value of a third field
+        // UserLabel4 : Value of a fourth field
+        // UserLabel5 : Value of a fifth field
+
+        String formatted_message =
+            p.field1_name + p.field1 +
+            p.field2_name + p.field2 +
+            p.field3_name + p.field3 +
+            p.field4_name + p.field4 +
+            p.field5_name + p.field5;
+
+        // Basic error handling
+        Boolean errorfree = True;
+
+        if(formatted_message == null){
+            System.debug('Missing Required Parameter - message. Will not make API call without payload.');
+            errorfree = False;
+        }
+        if(p.room == null){
+            System.debug('Missing Required Parameter - message. Will not make API call without payload.');
+            errorfree = False;
+        }
+
+        if (errorfree){
+
+            System.debug('All conditions met - Setting up API call...');
+
+            // Instantiate message body,
+            CHAPIFormattedMessage body = new CHAPIFormattedMessage();
+
+            // Populate with required API parameters
+            body.messageRaw = formatted_message;
+            body.room = p.room;
+
+            // json format the message
+            String jsonBody = json.serialize(body);
+            // jsonBody = '{"messageRaw":"Hello from Terminal!"}';
+
+            // Queue the API call
+            System.enqueueJob(new QueueableConnect(APITarget, p.APIKey, jsonBody));
+        } else System.debug('Message was not queued for API call. See reason above.');
+    }
+
+    public class QueueableConnect implements System.Queueable, Database.AllowsCallouts {
+        private final String url;
+        private final String apikey;
+        private final String body;
+
+        public QueueableConnect(String url, String apikey, String body) {
+            this.url = url;
+            this.apikey = apikey;
+            this.body = body;
+        }
+
+        public void execute(System.QueueableContext ctx) {
+            HttpRequest req = new HttpRequest();
+			      req.setHeader('x-api-key', apikey);
+            req.setHeader('Accept','*/*');
+            req.setHeader('Content-Type', 'application/json');
+            req.setEndpoint(url);
+            req.setMethod('POST');
+            req.setBody(body);
+            Http http = new Http();
+            if(!Test.isRunningTest()) {
+                HttpResponse res = http.send(req);
+                System.debug(res.getBody());
+            }
+        }
+    }
+}
